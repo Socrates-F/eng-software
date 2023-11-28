@@ -1,0 +1,253 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+from scipy.signal import convolve
+from scipy.fft import fft, ifft
+
+# Lista com todos os arquivos dos sensores.
+files = ["cam-normal-acel.csv", "cam-normal-giros.csv", "cam-pk-acel.csv", "cam-pk-giros.csv",
+            "escad-normal-acel.csv", "escad-normal-giros.csv", "escad-pk-acel.csv", "escad-pk-giros.csv"]
+
+min_distance = 100  # Distância mínima entre picos
+prominence = 0.1
+
+# Define o kernel para o filtro passa-baixa
+def lowpass_kernel(window_size):
+    return np.ones(window_size) / window_size
+
+# Define o kernel para o filtro passa-alta
+def highpass_kernel(window_size):
+    kernel = -lowpass_kernel(window_size)
+    kernel[window_size // 2] += 1
+    return kernel
+
+# Tamanho da janela para os filtros
+lowpass_window_size = 10
+highpass_window_size = 5
+
+# Função para aplicar a Transformada de Fourier
+def apply_fourier_transform(signal, sampling_rate):
+    N = len(signal)
+    frequencies = np.fft.fftfreq(N, 1 / sampling_rate)
+    spectrum = fft(signal)
+    return frequencies, spectrum
+
+# Função para aplicar um filtro passa-faixa no domínio da frequência
+def apply_bandpass_filter(frequencies, spectrum, low_cutoff, high_cutoff):
+    filtered_spectrum = spectrum.copy()
+    filtered_spectrum[(frequencies < low_cutoff) | (frequencies > high_cutoff)] = 0
+    return filtered_spectrum
+
+# Função para aplicar a Transformada Inversa de Fourier
+def apply_inverse_fourier_transform(frequencies, spectrum):
+    reconstructed_signal = ifft(spectrum)
+    return reconstructed_signal
+
+for file in files:
+    dados = pd.read_csv(file)
+
+    tempo = dados['Time (s)'].values
+    eixo_x = dados['Acceleration x (m/s^2)'].values if 'acel' in file else dados['Gyroscope x (rad/s)'].values
+    eixo_y = dados['Acceleration y (m/s^2)'].values if 'acel' in file else dados['Gyroscope y (rad/s)'].values
+    eixo_z = dados['Acceleration z (m/s^2)'].values if 'acel' in file else dados['Gyroscope z (rad/s)'].values
+
+    def filtrar_sinais(eixo, nome_eixo):
+        # Aplica o filtro passa-baixa
+        lowpass_filtered = convolve(eixo, lowpass_kernel(lowpass_window_size), mode='same')
+        # Aplica o filtro passa-alta
+        highpass_filtered = convolve(eixo, highpass_kernel(highpass_window_size), mode='same')
+        # Sinal involuntário (componente de alta frequência)
+        involuntary_signal = eixo - lowpass_filtered
+        # Sinal voluntário (componente de baixa frequência)
+        voluntary_signal = lowpass_filtered
+        
+        plt.plot(tempo, eixo, label=f'{nome_eixo} (Original)')
+        plt.plot(tempo, involuntary_signal, label=f'{nome_eixo} (Involuntário)')
+        plt.plot(tempo, voluntary_signal, label=f'{nome_eixo} (Voluntário)')
+
+    plt.figure(figsize=(12, 6))
+
+
+    # Gráfico para a componente X
+    plt.subplot(3, 1, 1)
+    filtrar_sinais(eixo_x, 'Aceleração X (m/s²)' if 'acel' in file else 'Orientação X (rad/s)')
+    plt.xlabel('Tempo (s)')
+    plt.legend()
+
+    # Gráfico para a componente Y
+    plt.subplot(312)
+    filtrar_sinais(eixo_y, 'Aceleração Y (m/s²)' if 'acel' in file else 'Orientação Y (rad/s)')
+    plt.xlabel('Tempo (s)')
+    plt.legend()
+
+    # Gráfico para a componente Z
+    plt.subplot(313)
+    filtrar_sinais(eixo_z, 'Aceleração Z (m/s²)' if 'acel' in file else 'Orientação Z (rad/s)')
+    plt.xlabel('Tempo (s)')
+    plt.legend()
+
+    plt.suptitle(f'Dados do Acelerômetro - {file}' if 'acel' in file else f'Dados do Giroscópio - {file}')
+    plt.tight_layout()
+
+    plt.legend(bbox_to_anchor=(0.005, 0.004), loc='upper left')
+
+    # Aplicar a Transformada de Fourier para cada eixo
+    sampling_rate = 1 / (tempo[1] - tempo[0])  # Taxa de amostragem
+    frequencies_x, spectrum_x = apply_fourier_transform(eixo_x, sampling_rate)
+    frequencies_y, spectrum_y = apply_fourier_transform(eixo_y, sampling_rate)
+    frequencies_z, spectrum_z = apply_fourier_transform(eixo_z, sampling_rate)
+
+    # Aplicar filtros passa-faixa no domínio da frequência
+    low_cutoff = -2  # Frequência mínima
+    high_cutoff = 10.0  # Frequência máxima
+    filtered_spectrum_x = apply_bandpass_filter(frequencies_x, spectrum_x, low_cutoff, high_cutoff)
+    filtered_spectrum_y = apply_bandpass_filter(frequencies_y, spectrum_y, low_cutoff, high_cutoff)
+    filtered_spectrum_z = apply_bandpass_filter(frequencies_z, spectrum_z, low_cutoff, high_cutoff)
+
+    # Aplicar a Transformada Inversa de Fourier para obter os sinais filtrados
+    filtered_signal_x = apply_inverse_fourier_transform(frequencies_x, filtered_spectrum_x)
+    filtered_signal_y = apply_inverse_fourier_transform(frequencies_y, filtered_spectrum_y)
+    filtered_signal_z = apply_inverse_fourier_transform(frequencies_z, filtered_spectrum_z)
+
+    # Plotar os sinais filtrados no domínio do tempo
+    plt.figure(figsize=(12, 6))
+
+    # Gráfico para a componente X filtrada
+    plt.subplot(3, 1, 1)
+    plt.plot(tempo, filtered_signal_x, label=f'Aceleração X (m/s²) (Filtrado)' if 'acel' in file else f'Orientação X (rad/s) (Filtrado)')
+    plt.xlabel('Tempo (s)')
+    plt.legend()
+
+    # Gráfico para a componente Y filtrada
+    plt.subplot(312)
+    plt.plot(tempo, filtered_signal_y, label=f'Aceleração Y (m/s²) (Filtrado)' if 'acel' in file else f'Orientação Y (rad/s) (Filtrado)')
+    plt.xlabel('Tempo (s)')
+    plt.legend()
+
+    # Gráfico para a componente Z filtrada
+    plt.subplot(313)
+    plt.plot(tempo, filtered_signal_z, label=f'Aceleração Z (m/s²) (Filtrado)' if 'acel' in file else f'Orientação Z (rad/s) (Filtrado)')
+    plt.xlabel('Tempo (s)')
+    plt.legend()
+
+    plt.suptitle(f'Sinais Filtrados - {file}')
+    plt.tight_layout()
+
+    plt.legend(bbox_to_anchor=(0.005, 0.004), loc='upper left')
+
+    plt.show()
+'''
+'''
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+from scipy.fft import fft, ifft
+
+# Lista com todos os arquivos dos sensores.
+files = ["cam-normal-acel.csv", "cam-normal-giros.csv", "cam-pk-acel.csv", "cam-pk-giros.csv",
+            "escad-normal-acel.csv", "escad-normal-giros.csv", "escad-pk-acel.csv", "escad-pk-giros.csv"]
+
+min_distance = 100  # Distância mínima entre picos
+prominence = 0.1
+
+# Tamanho da janela para os filtros
+lowpass_window_size = 10
+highpass_window_size = 5
+
+# Função para aplicar a Transformada de Fourier
+def apply_fourier_transform(signal, sampling_rate):
+    N = len(signal)
+    frequencies = np.fft.fftfreq(N, 1 / sampling_rate)
+    spectrum = fft(signal)
+    return frequencies, spectrum
+
+# Função para aplicar um filtro passa-faixa no domínio da frequência
+def apply_bandpass_filter(frequencies, spectrum, low_cutoff, high_cutoff):
+    filtered_spectrum = spectrum.copy()
+    filtered_spectrum[(frequencies < low_cutoff) | (frequencies > high_cutoff)] = 0
+    return filtered_spectrum
+
+# Função para aplicar a Transformada Inversa de Fourier
+def apply_inverse_fourier_transform(frequencies, spectrum):
+    reconstructed_signal = ifft(spectrum)
+    return reconstructed_signal
+
+for file in files:
+    dados = pd.read_csv(file)
+
+    tempo = dados['Time (s)'].values
+    eixo_x = dados['Acceleration x (m/s^2)'].values if 'acel' in file else dados['Gyroscope x (rad/s)'].values
+    eixo_y = dados['Acceleration y (m/s^2)'].values if 'acel' in file else dados['Gyroscope y (rad/s)'].values
+    eixo_z = dados['Acceleration z (m/s^2)'].values if 'acel' in file else dados['Gyroscope z (rad/s)'].values
+
+    plt.figure(figsize=(12, 6))
+
+    # Gráfico para a componente X
+    plt.subplot(3, 1, 1)
+    plt.plot(tempo, eixo_x, label='Aceleração X (m/s²)' if 'acel' in file else 'Orientação X (rad/s)')
+    plt.xlabel('Tempo (s)')
+    plt.legend()
+
+    # Gráfico para a componente Y
+    plt.subplot(312)
+    plt.plot(tempo, eixo_y, label='Aceleração Y (m/s²)' if 'acel' in file else 'Orientação Y (rad/s)')
+    plt.xlabel('Tempo (s)')
+    plt.legend()
+
+    # Gráfico para a componente Z
+    plt.subplot(313)
+    plt.plot(tempo, eixo_z, label='Aceleração Z (m/s²)' if 'acel' in file else 'Orientação Z (rad/s)')
+    plt.xlabel('Tempo (s)')
+    plt.legend()
+
+    plt.suptitle(f'Dados do Acelerômetro - {file}' if 'acel' in file else f'Dados do Giroscópio - {file}')
+    plt.tight_layout()
+
+    plt.legend(bbox_to_anchor=(0.005, 0.004), loc='upper left')
+
+    # Aplicar a Transformada de Fourier para cada eixo
+    sampling_rate = 1 / (tempo[1] - tempo[0])  # Taxa de amostragem
+    frequencies_x, spectrum_x = apply_fourier_transform(eixo_x, sampling_rate)
+    frequencies_y, spectrum_y = apply_fourier_transform(eixo_y, sampling_rate)
+    frequencies_z, spectrum_z = apply_fourier_transform(eixo_z, sampling_rate)
+
+    # Aplicar filtros passa-faixa no domínio da frequência
+    low_cutoff = 0.1  # Frequência mínima
+    high_cutoff = 10.0  # Frequência máxima
+    filtered_spectrum_x = apply_bandpass_filter(frequencies_x, spectrum_x, low_cutoff, high_cutoff)
+    filtered_spectrum_y = apply_bandpass_filter(frequencies_y, spectrum_y, low_cutoff, high_cutoff)
+    filtered_spectrum_z = apply_bandpass_filter(frequencies_z, spectrum_z, low_cutoff, high_cutoff)
+
+    # Aplicar a Transformada Inversa de Fourier para obter os sinais filtrados
+    filtered_signal_x = apply_inverse_fourier_transform(frequencies_x, filtered_spectrum_x)
+    filtered_signal_y = apply_inverse_fourier_transform(frequencies_y, filtered_spectrum_y)
+    filtered_signal_z = apply_inverse_fourier_transform(frequencies_z, filtered_spectrum_z)
+
+    # Plotar os sinais filtrados no domínio do tempo
+    plt.figure(figsize=(12, 6))
+
+    # Gráfico para a componente X filtrada
+    plt.subplot(3, 1, 1)
+    plt.plot(tempo, np.real(filtered_signal_x), label='Aceleração X (m/s²) (Filtrado)' if 'acel' in file else 'Orientação X (rad/s) (Filtrado)')
+    plt.xlabel('Tempo (s)')
+    plt.legend()
+
+    # Gráfico para a componente Y filtrada
+    plt.subplot(312)
+    plt.plot(tempo, np.real(filtered_signal_y), label='Aceleração Y (m/s²) (Filtrado)' if 'acel' in file else 'Orientação Y (rad/s) (Filtrado)')
+    plt.xlabel('Tempo (s)')
+    plt.legend()
+
+    # Gráfico para a componente Z filtrada
+    plt.subplot(313)
+    plt.plot(tempo, np.real(filtered_signal_z), label='Aceleração Z (m/s²) (Filtrado)' if 'acel' in file else 'Orientação Z (rad/s) (Filtrado)')
+    plt.xlabel('Tempo (s)')
+    plt.legend()
+
+    plt.suptitle(f'Sinais Filtrados - {file}')
+    plt.tight_layout()
+
+    plt.legend(bbox_to_anchor=(0.005, 0.004), loc='upper left')
+
+    plt.show()
+
