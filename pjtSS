@@ -1,3 +1,81 @@
+'''
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+from scipy.signal import convolve
+
+# Lista com todos os arquivos dos sensores.
+files = ["cam-normal-acel.csv", "cam-normal-giros.csv", "cam-pk-acel.csv", "cam-pk-giros.csv",
+            "escad-normal-acel.csv", "escad-normal-giros.csv", "escad-pk-acel.csv", "escad-pk-giros.csv"]
+
+
+# Define o kernel para o filtro passa-baixa
+def lowpass_kernel(window_size):
+    return np.ones(window_size) / window_size
+
+# Define o kernel para o filtro passa-alta
+def highpass_kernel(window_size):
+    kernel = -lowpass_kernel(window_size)
+    kernel[window_size // 2] += 1
+    return kernel
+
+
+# Tamanho da janela para os filtros // é possivel alterar para se ter outras visualizaçoes do filtro aplicado
+lowpass_window_size = 10
+highpass_window_size = 5
+
+for file in files:
+    dados = pd.read_csv(file)
+
+    tempo = dados['Time (s)']
+    eixo_x = dados['Acceleration x (m/s^2)'] if 'acel' in file else dados['Gyroscope x (rad/s)']
+    eixo_y = dados['Acceleration y (m/s^2)'] if 'acel' in file else dados['Gyroscope y (rad/s)']
+    eixo_z = dados['Acceleration z (m/s^2)'] if 'acel' in file else dados['Gyroscope z (rad/s)']
+
+    #Funçao que vai aplicar o filtro dos nossos kernels 
+    def filtrar_sinais(eixo, nome_eixo):
+        # Aplica o filtro passa-baixa
+        lowpass_filtered = convolve(eixo, lowpass_kernel(lowpass_window_size), mode='same')
+        # Aplica o filtro passa-alta
+        highpass_filtered = convolve(eixo, highpass_kernel(highpass_window_size), mode='same')
+        # Sinal involuntário (componente de alta frequência)
+        involuntary_signal = eixo - lowpass_filtered
+        # Sinal voluntário (componente de baixa frequência)
+        voluntary_signal = lowpass_filtered
+        
+        #plotagem dos sinais diversos "original, voluntário e involuntário"
+        plt.plot(tempo, eixo, label=f'{nome_eixo} (Original)')
+        plt.plot(tempo, involuntary_signal, label=f'{nome_eixo} (Involuntário)')
+        plt.plot(tempo, voluntary_signal, label=f'{nome_eixo} (Voluntário)')
+
+    plt.figure(figsize=(12, 6))
+
+    #Plotagem de gráficos para cada um dos componentes com a filtro aplicado 
+    # Gráfico para a componente X
+    plt.subplot(3, 1, 1)
+    filtrar_sinais(eixo_x, 'Aceleração X (m/s²)' if 'acel' in file else 'Orientação X (rad/s)')
+    plt.xlabel('Tempo (s)')
+    plt.legend()
+
+    # Gráfico para a componente Y
+    plt.subplot(312)
+    filtrar_sinais(eixo_y, 'Aceleração Y (m/s²)' if 'acel' in file else 'Orientação Y (rad/s)')
+    plt.xlabel('Tempo (s)')
+    plt.legend()
+
+    # Gráfico para a componente Z
+    plt.subplot(313)
+    filtrar_sinais(eixo_z, 'Aceleração Z (m/s²)' if 'acel' in file else 'Orientação Z (rad/s)')
+    plt.xlabel('Tempo (s)')
+    plt.legend()
+
+    plt.suptitle(f'Dados do Acelerômetro - {file}' if 'acel' in file else f'Dados do Giroscópio - {file}')
+    plt.tight_layout()
+
+    plt.legend(bbox_to_anchor=(0.005, 0.004), loc='upper left')
+    plt.show()
+'''
+
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
