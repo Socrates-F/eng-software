@@ -1,8 +1,8 @@
 import express from "express";
 import { model, connect } from "mongoose";
 import userSchema from "./Schemas/user.js";
-import UserWallet from "./Schemas/userWalletSchema.js";
-import UserAccount from "./Schemas/userAccountSchema.js";
+import userWalletSchema from "./Schemas/userWallet.js";
+import userAccountSchema from "./Schemas/userAccount.js";
 import bcrypt from "bcrypt";
 
 const User = model("User", userSchema);
@@ -15,7 +15,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static("public"));
 
-//fiz uma alteraçao para um banco de dados via netword "hospedado"
+//fiz uma alteraçao para um banco de dados via netword "hospedado" 
 connect(
     "mongodb+srv://Socrates:Namikaze123@cluster0.hh2hejz.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
 )

@@ -10,4 +10,4 @@ const userWalletSchema = new mongoose.Schema({
     saldo: Number
 });
 
-export default userWallet;
+export default userWalletSchema;

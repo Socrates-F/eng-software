@@ -16,4 +16,4 @@ const userAccountSchema = new mongoose.Schema({
     }
 });
 
-export default userAccount;
+export default userAccountSchema;
